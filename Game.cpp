@@ -23,14 +23,42 @@ bool Game::init(const char* title, int width, int height) {
         return false;
     }
 
-    // Create Player (red square, controllable)
+    // Spawn initial entities
     player = spawnEntity(100.0f, 100.0f, SDL_Color{ 255, 0, 0, 255 }, true);
-
-    // Create Blue Box (static)
     blueBox = spawnEntity(300.0f, 200.0f, SDL_Color{ 0, 0, 255, 255 });
 
     isRunning = true;
     return true;
+}
+Entity Game::spawnEntity(float x, float y, SDL_Color color, bool playerControlled) {
+    Entity e = entityManager.createEntity();
+    if (e == 0) return 0;
+
+    cm.positions[e] = { x, y };
+    cm.renderables[e] = { color, 50, 50 };
+    cm.velocities[e] = { 0.0f, 0.0f };
+
+    uint32_t mask = POSITION | VELOCITY | RENDERABLE;
+    if (playerControlled) {
+        cm.playerControlled[e] = {};
+        mask |= PLAYERCONTROLLED;
+    }
+    cm.componentMasks[e] = mask;
+    return e;
+}
+void Game::destroyEntityWithComponents(Entity e) {
+    if (e == 0) return;
+    entityManager.destroyEntity(e);
+    cm.positions.erase(e);
+    cm.velocities.erase(e);
+    cm.renderables.erase(e);
+    cm.playerControlled.erase(e);
+    cm.componentMasks.erase(e);
+}
+void Game::destroyAllEnemies() {
+    for (Entity e : enemies)
+        destroyEntityWithComponents(e);
+    enemies.clear();
 }
 
 void Game::handleEvents() {
@@ -41,21 +69,21 @@ void Game::handleEvents() {
 
         // Example: press SPACE to spawn the enemy
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
-            if (enemy == 0) { // not already spawned
-                enemy = spawnEntity(400.0f, 300.0f, SDL_Color{ 0, 255, 0, 255 }, true);
-            }
+            // Spawn a new enemy at random position
+            float x = rand() % 700 + 50; // avoid edges
+            float y = rand() % 500 + 50;
+            Entity enemy = spawnEntity(x, y, SDL_Color{ 0, 255, 0, 255 });
+            cm.velocities[enemy] = { static_cast<float>(rand() % 200 - 100),
+                         static_cast<float>(rand() % 200 - 100) };
+            if (enemy != 0) enemies.push_back(enemy);
         }
 
         // Example: press DELETE to remove the enemy
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_DELETE) {
-            if (enemy != 0) { // enemy exists
-                entityManager.destroyEntity(enemy);
-                cm.positions.erase(enemy);
-                cm.velocities.erase(enemy);
-                cm.renderables.erase(enemy);
-                cm.playerControlled.erase(enemy);
-                cm.componentMasks.erase(enemy);
-                enemy = 0; // reset
+            if (!enemies.empty()) {
+                Entity e = enemies.back();
+                destroyEntityWithComponents(e);
+                enemies.pop_back();
             }
         }
     }
@@ -64,7 +92,25 @@ void Game::handleEvents() {
 
 void Game::update(float dt) {
     auto active = entityManager.getActiveEntities();
+
+    resetCollisionColors();
     movementSystem.update(cm, active, dt);
+
+    for (Entity e : active) {
+        auto& pos = cm.positions[e];
+        auto& vel = cm.velocities[e];
+        auto& rend = cm.renderables[e];
+
+        // Horizontal bounce
+        if (pos.x < 0) { pos.x = 0; vel.x = -vel.x; }
+        if (pos.x + rend.w > 800) { pos.x = 800 - rend.w; vel.x = -vel.x; }
+
+        // Vertical bounce
+        if (pos.y < 0) { pos.y = 0; vel.y = -vel.y; }
+        if (pos.y + rend.h > 600) { pos.y = 600 - rend.h; vel.y = -vel.y; }
+    }   
+
+    collisionSystem.update(cm, active);
 }
 
 void Game::render() {

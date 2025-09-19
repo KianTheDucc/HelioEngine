@@ -16,23 +16,14 @@ public:
     void clean();
     bool running() const { return isRunning; }
 
-    Entity spawnEntity(float x, float y, SDL_Color color, bool playerControlled = false) {
-        Entity e = entityManager.createEntity();
-
-        cm.positions[e] = { x, y };
-        cm.renderables[e] = { color, 50, 50 };
-        cm.velocities[e] = { 0.0f, 0.0f };
-
-        uint32_t mask = 0;
-        mask |= POSITION | VELOCITY | RENDERABLE;
-
-        if (playerControlled) {
-            cm.playerControlled[e] = {};
-            mask |= PLAYERCONTROLLED;
+    // Fully mask-integrated spawn
+    Entity spawnEntity(float x, float y, SDL_Color color, bool playerControlled = false);
+    void destroyEntityWithComponents(Entity e);
+    void destroyAllEnemies();
+    void resetCollisionColors() {
+        for (auto& [entity, rend] : cm.renderables) {
+            rend.color = rend.color.r == 255 && rend.color.g == 255 && rend.color.b == 0 ? SDL_Color{ 0, 255, 0, 255 } : rend.color;
         }
-
-        cm.componentMasks[e] = mask;
-        return e;
     }
 
 private:
@@ -44,10 +35,13 @@ private:
     InputSystem inputSystem;
     MovementSystem movementSystem;
     RenderSystem renderSystem;
+    CollisionSystem collisionSystem;
     EntityManager entityManager;
 
     Entity player;
     Entity blueBox;
     Entity enemy = 0;
+    std::vector<Entity> enemies; // track multiple dynamic enemies
+
 
 };
