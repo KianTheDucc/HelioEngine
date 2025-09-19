@@ -37,6 +37,8 @@ private:
     RenderSystem renderSystem;
     CollisionSystem collisionSystem;
     EntityManager entityManager;
+    EnemyAISystem enemyAISystem;
+    HealthSystem healthSystem;
 
     Entity player;
     Entity blueBox;

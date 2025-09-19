@@ -1,7 +1,42 @@
 #pragma once
 #include "ComponentManager.h"
+#include "EntityManager.h"
 #include <SDL.h>
+#include <algorithm>
+#include <cmath>
 
+// ------------------- HEALTH SYSTEM -------------------
+class HealthSystem {
+public:
+    void damage(Entity e, ComponentManager& cm, int amount) {
+        if ((cm.componentMasks[e] & HEALTH) != HEALTH) return;
+
+        auto& h = cm.healths[e];
+        h.current -= amount;
+        if (h.current <= 0) {
+            h.current = 0;
+            onDeath(e, cm);
+        }
+    }
+
+    void heal(Entity e, ComponentManager& cm, int amount) {
+        if ((cm.componentMasks[e] & HEALTH) != HEALTH) return;
+
+        auto& h = cm.healths[e];
+        h.current = std::min(h.current + amount, h.max);
+    }
+
+private:
+    void onDeath(Entity e, ComponentManager& cm) {
+        cm.componentMasks[e] = 0;
+        cm.positions.erase(e);
+        cm.velocities.erase(e);
+        cm.renderables.erase(e);
+        cm.healths.erase(e);
+    }
+};
+
+// ------------------- INPUT SYSTEM -------------------
 class InputSystem {
 public:
     void handleEvent(const SDL_Event& event, ComponentManager& cm) {
@@ -28,6 +63,7 @@ public:
     }
 };
 
+// ------------------- MOVEMENT SYSTEM -------------------
 class MovementSystem {
 public:
     void update(ComponentManager& cm, const std::vector<Entity>& entities, float dt) {
@@ -44,6 +80,7 @@ public:
     }
 };
 
+// ------------------- RENDER SYSTEM -------------------
 class RenderSystem {
 public:
     void render(ComponentManager& cm, SDL_Renderer* renderer, const std::vector<Entity>& entities) {
@@ -67,11 +104,12 @@ public:
         }
     }
 };
+
+// ------------------- COLLISION SYSTEM -------------------
 class CollisionSystem {
 public:
-    // Check collisions between entities with POSITION and RENDERABLE
-    void update(ComponentManager& cm, const std::vector<Entity>& entities) {
-        const uint32_t requiredMask = POSITION | RENDERABLE;
+    void update(ComponentManager& cm, const std::vector<Entity>& entities, HealthSystem& healthSystem) {
+        const uint32_t requiredMask = POSITION | RENDERABLE | VELOCITY;
 
         for (size_t i = 0; i < entities.size(); ++i) {
             Entity a = entities[i];
@@ -79,6 +117,7 @@ public:
 
             auto& posA = cm.positions[a];
             auto& rendA = cm.renderables[a];
+            auto& velA = cm.velocities[a];
 
             SDL_Rect rectA = {
                 static_cast<int>(posA.x),
@@ -93,6 +132,7 @@ public:
 
                 auto& posB = cm.positions[b];
                 auto& rendB = cm.renderables[b];
+                auto& velB = cm.velocities[b];
 
                 SDL_Rect rectB = {
                     static_cast<int>(posB.x),
@@ -102,28 +142,71 @@ public:
                 };
 
                 if (SDL_HasIntersection(&rectA, &rectB)) {
-                    onCollision(a, b, cm);
+                    resolveCollision(posA, velA, rendA, posB, velB, rendB);
+
+                    if (cm.playerControlled.find(a) != cm.playerControlled.end()) {
+                        healthSystem.damage(a, cm, 10);
+                    }
+                    if (cm.playerControlled.find(b) != cm.playerControlled.end()) {
+                        healthSystem.damage(b, cm, 10);
+                    }
                 }
             }
         }
     }
 
-    // Simple collision reaction (change color on collision)
-    void onCollision(Entity a, Entity b, ComponentManager& cm) {
-        auto& velA = cm.velocities[a];
-        auto& velB = cm.velocities[b];
+private:
+    void resolveCollision(Position& posA, Velocity& velA, Renderable& rendA,
+        Position& posB, Velocity& velB, Renderable& rendB)
+    {
+        float ax1 = posA.x, ay1 = posA.y;
+        float ax2 = posA.x + rendA.w, ay2 = posA.y + rendA.h;
+        float bx1 = posB.x, by1 = posB.y;
+        float bx2 = posB.x + rendB.w, by2 = posB.y + rendB.h;
 
-        // Simple AABB bounce: reverse velocity
-        velA.x = -velA.x;
-        velA.y = -velA.y;
+        float overlapX = std::min(ax2, bx2) - std::max(ax1, bx1);
+        float overlapY = std::min(ay2, by2) - std::max(ay1, by1);
 
-        velB.x = -velB.x;
-        velB.y = -velB.y;
+        if (overlapX < overlapY) {
+            if (ax1 < bx1) { posA.x -= overlapX / 2; posB.x += overlapX / 2; }
+            else { posA.x += overlapX / 2; posB.x -= overlapX / 2; }
+            velA.x = -velA.x * 0.5f;
+            velB.x = -velB.x * 0.5f;
+        }
+        else {
+            if (ay1 < by1) { posA.y -= overlapY / 2; posB.y += overlapY / 2; }
+            else { posA.y += overlapY / 2; posB.y -= overlapY / 2; }
+            velA.y = -velA.y * 0.5f;
+            velB.y = -velB.y * 0.5f;
+        }
+    }
+};
 
-        // Optional: change color to visualize collision
-        //if ((cm.componentMasks[a] & RENDERABLE) == RENDERABLE)
-        //    cm.renderables[a].color = SDL_Color{ 255, 255, 0, 255 };
-        //if ((cm.componentMasks[b] & RENDERABLE) == RENDERABLE)
-        //    cm.renderables[b].color = SDL_Color{ 255, 255, 0, 255 };
+// ------------------- ENEMY AI SYSTEM -------------------
+class EnemyAISystem {
+public:
+    void update(ComponentManager& cm, const std::vector<Entity>& entities, Entity player, float dt) {
+        const uint32_t requiredMask = POSITION | VELOCITY;
+
+        if ((cm.componentMasks[player] & POSITION) != POSITION) return;
+        auto& playerPos = cm.positions[player];
+
+        for (Entity e : entities) {
+            if ((cm.componentMasks[e] & requiredMask) != requiredMask) continue;
+            if (e == player) continue;
+
+            auto& pos = cm.positions[e];
+            auto& vel = cm.velocities[e];
+
+            float dx = playerPos.x - pos.x;
+            float dy = playerPos.y - pos.y;
+            float length = sqrtf(dx * dx + dy * dy);
+
+            if (length > 0.0f) {
+                float speed = 100.0f;
+                vel.x = (dx / length) * speed;
+                vel.y = (dy / length) * speed;
+            }
+        }
     }
 };

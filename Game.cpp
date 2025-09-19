@@ -34,16 +34,29 @@ Entity Game::spawnEntity(float x, float y, SDL_Color color, bool playerControlle
     Entity e = entityManager.createEntity();
     if (e == 0) return 0;
 
+    // Position & movement
     cm.positions[e] = { x, y };
-    cm.renderables[e] = { color, 50, 50 };
     cm.velocities[e] = { 0.0f, 0.0f };
 
-    uint32_t mask = POSITION | VELOCITY | RENDERABLE;
+    // Rendering
+    cm.renderables[e] = { color, 50, 50 };
+
+    // Health
+    if (playerControlled) {
+        cm.healths[e] = { 100, 100 }; // player starts with more HP
+    }
+    else {
+        cm.healths[e] = { 20, 20 };   // enemies start with less HP
+    }
+
+    // Component mask
+    uint32_t mask = POSITION | VELOCITY | RENDERABLE | HEALTH;
     if (playerControlled) {
         cm.playerControlled[e] = {};
         mask |= PLAYERCONTROLLED;
     }
     cm.componentMasks[e] = mask;
+
     return e;
 }
 void Game::destroyEntityWithComponents(Entity e) {
@@ -67,7 +80,7 @@ void Game::handleEvents() {
         if (event.type == SDL_QUIT) isRunning = false;
         inputSystem.handleEvent(event, cm);
 
-        // Example: press SPACE to spawn the enemy
+        //press SPACE to spawn the enemy
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
             // Spawn a new enemy at random position
             float x = rand() % 700 + 50; // avoid edges
@@ -78,7 +91,7 @@ void Game::handleEvents() {
             if (enemy != 0) enemies.push_back(enemy);
         }
 
-        // Example: press DELETE to remove the enemy
+        // press DELETE to remove the enemy
         if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_DELETE) {
             if (!enemies.empty()) {
                 Entity e = enemies.back();
@@ -91,10 +104,12 @@ void Game::handleEvents() {
 }
 
 void Game::update(float dt) {
-    auto active = entityManager.getActiveEntities();
+    std::vector<Entity> active = entityManager.getActiveEntities();
 
     resetCollisionColors();
     movementSystem.update(cm, active, dt);
+
+    enemyAISystem.update(cm, active, player, dt); // AI updates velocities
 
     for (Entity e : active) {
         auto& pos = cm.positions[e];
@@ -110,7 +125,8 @@ void Game::update(float dt) {
         if (pos.y + rend.h > 600) { pos.y = 600 - rend.h; vel.y = -vel.y; }
     }   
 
-    collisionSystem.update(cm, active);
+
+    collisionSystem.update(cm, active, healthSystem);
 }
 
 void Game::render() {
