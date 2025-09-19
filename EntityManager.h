@@ -2,6 +2,7 @@
 #include "Components.h"
 #include <queue>
 #include <set>
+#include <vector>
 
 class EntityManager {
 public:
@@ -32,6 +33,10 @@ public:
     // Optional: check if an entity is alive
     bool isAlive(Entity entity) const {
         return activeEntities.find(entity) != activeEntities.end();
+    }
+
+    std::vector<Entity> getActiveEntities() const {
+        return std::vector<Entity>(activeEntities.begin(), activeEntities.end());
     }
 
 private:

@@ -30,9 +30,12 @@ public:
 
 class MovementSystem {
 public:
-    void update(ComponentManager& cm, float dt) {
-        for (auto& [entity, pos] : cm.positions) {
-            if (cm.velocities.find(entity) != cm.velocities.end()) {
+    void update(ComponentManager& cm, const std::vector<Entity>& entities, float dt) {
+        const uint32_t requiredMask = POSITION | VELOCITY;
+
+        for (Entity entity : entities) {
+            if ((cm.componentMasks[entity] & requiredMask) == requiredMask) {
+                auto& pos = cm.positions[entity];
                 auto& vel = cm.velocities[entity];
                 pos.x += vel.x * dt;
                 pos.y += vel.y * dt;
@@ -43,16 +46,21 @@ public:
 
 class RenderSystem {
 public:
-    void render(ComponentManager& cm, SDL_Renderer* renderer) {
-        for (auto& [entity, rend] : cm.renderables) {
-            if (cm.positions.find(entity) != cm.positions.end()) {
+    void render(ComponentManager& cm, SDL_Renderer* renderer, const std::vector<Entity>& entities) {
+        const uint32_t requiredMask = POSITION | RENDERABLE;
+
+        for (Entity entity : entities) {
+            if ((cm.componentMasks[entity] & requiredMask) == requiredMask) {
                 auto& pos = cm.positions[entity];
+                auto& rend = cm.renderables[entity];
+
                 SDL_Rect rect = {
                     static_cast<int>(pos.x),
                     static_cast<int>(pos.y),
                     rend.w,
                     rend.h
                 };
+
                 SDL_SetRenderDrawColor(renderer, rend.color.r, rend.color.g, rend.color.b, rend.color.a);
                 SDL_RenderFillRect(renderer, &rect);
             }

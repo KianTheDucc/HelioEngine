@@ -138,6 +138,7 @@
   <ItemGroup>
     <ClInclude Include="ComponentManager.h" />
     <ClInclude Include="Components.h" />
+    <ClInclude Include="EntityManager.h" />
     <ClInclude Include="Game.h" />
     <ClInclude Include="Systems.h" />
   </ItemGroup>
