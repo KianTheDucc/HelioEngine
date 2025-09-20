@@ -11,6 +11,13 @@ public:
     void damage(Entity e, ComponentManager& cm, int amount) {
         if ((cm.componentMasks[e] & HEALTH) != HEALTH) return;
 
+        // check if entity has a cooldown component
+        if (cm.damageCooldown.find(e) != cm.damageCooldown.end()) {
+            auto& dc = cm.damageCooldown[e];
+            if (dc.timer > 0.0f) return; // still on cooldown
+            dc.timer = dc.cooldown;      // reset timer
+        }
+
         auto& h = cm.healths[e];
         h.current -= amount;
         if (h.current <= 0) {

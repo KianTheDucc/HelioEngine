@@ -12,7 +12,10 @@ struct Health {
     int current;
     int max;
 };
-
+struct DamageCooldown {
+    float timer;   // time remaining before next damage
+    float cooldown; // fixed cooldown duration
+};
 
 // Component bitmask identifiers
 enum ComponentType : uint32_t {

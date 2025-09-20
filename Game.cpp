@@ -49,6 +49,10 @@ Entity Game::spawnEntity(float x, float y, SDL_Color color, bool playerControlle
         cm.healths[e] = { 20, 20 };   // enemies start with less HP
     }
 
+    //Damage Cooldown
+
+    cm.damageCooldown[e] = { 0.0f, 1.0f };
+
     // Component mask
     uint32_t mask = POSITION | VELOCITY | RENDERABLE | HEALTH;
     if (playerControlled) {
@@ -65,6 +69,8 @@ void Game::destroyEntityWithComponents(Entity e) {
     cm.positions.erase(e);
     cm.velocities.erase(e);
     cm.renderables.erase(e);
+    cm.healths.erase(e);
+    cm.damageCooldown.erase(e);
     cm.playerControlled.erase(e);
     cm.componentMasks.erase(e);
 }
@@ -102,7 +108,14 @@ void Game::handleEvents() {
     }
     
 }
-
+void updateDamageCooldowns(ComponentManager& cm, float dt) {
+    for (auto& [entity, dc] : cm.damageCooldown) {
+        if (dc.timer > 0.0f) {
+            dc.timer -= dt;
+            if (dc.timer < 0.0f) dc.timer = 0.0f;
+        }
+    }
+}
 void Game::update(float dt) {
     std::vector<Entity> active = entityManager.getActiveEntities();
 
@@ -125,7 +138,7 @@ void Game::update(float dt) {
         if (pos.y + rend.h > 600) { pos.y = 600 - rend.h; vel.y = -vel.y; }
     }   
 
-
+    updateDamageCooldowns(cm, dt);
     collisionSystem.update(cm, active, healthSystem);
 }
 
