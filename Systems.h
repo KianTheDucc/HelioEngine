@@ -69,6 +69,31 @@ public:
         }
     }
 };
+// ------------------- PROJECTILE SYSTEM -------------------
+class ProjectileSystem {
+public:
+    void update(ComponentManager& cm, std::vector<Entity>& entities, float dt) {
+        std::vector<Entity> toRemove;
+
+        for (Entity e : entities) {
+            if ((cm.componentMasks[e] & PROJECTILE) == 0) continue;
+
+            auto& proj = cm.projectiles[e];
+            proj.lifetime -= dt;
+            if (proj.lifetime <= 0) {
+                toRemove.push_back(e);
+            }
+        }
+
+        for (Entity e : toRemove) {
+            cm.componentMasks[e] = 0;
+            cm.positions.erase(e);
+            cm.velocities.erase(e);
+            cm.renderables.erase(e);
+            cm.projectiles.erase(e);
+        }
+    }
+};
 
 // ------------------- MOVEMENT SYSTEM -------------------
 class MovementSystem {
@@ -112,9 +137,17 @@ public:
     }
 };
 
+
 // ------------------- COLLISION SYSTEM -------------------
 class CollisionSystem {
 public:
+    void destroyProjectile(ComponentManager& cm, Entity e) {
+        cm.componentMasks[e] = 0;
+        cm.positions.erase(e);
+        cm.velocities.erase(e);
+        cm.renderables.erase(e);
+        cm.projectiles.erase(e);
+    }
     void update(ComponentManager& cm, const std::vector<Entity>& entities, HealthSystem& healthSystem) {
         const uint32_t requiredMask = POSITION | RENDERABLE | VELOCITY;
 
@@ -149,6 +182,31 @@ public:
                 };
 
                 if (SDL_HasIntersection(&rectA, &rectB)) {
+                    // 🚫 Ignore projectile vs. projectile
+                    if ((cm.componentMasks[a] & PROJECTILE) && (cm.componentMasks[b] & PROJECTILE)) {
+                        continue;
+                    }
+
+                    // Case 1: Projectile vs. Enemy
+                    if ((cm.componentMasks[a] & PROJECTILE) && (cm.componentMasks[b] & HEALTH)) {
+                        auto& proj = cm.projectiles[a];
+                        healthSystem.damage(b, cm, proj.damage);
+
+                        // Destroy projectile
+                        destroyProjectile(cm, a);
+                        continue;
+                    }
+
+                    if ((cm.componentMasks[b] & PROJECTILE) && (cm.componentMasks[a] & HEALTH)) {
+                        auto& proj = cm.projectiles[b];
+                        healthSystem.damage(a, cm, proj.damage);
+
+                        // Destroy projectile
+                        destroyProjectile(cm, b);
+                        continue;
+                    }
+
+                    // Case 2: Regular entity collisions (player vs enemy, etc.)
                     resolveCollision(posA, velA, rendA, posB, velB, rendB);
 
                     if (cm.playerControlled.find(a) != cm.playerControlled.end()) {
@@ -196,12 +254,14 @@ public:
         const uint32_t requiredMask = POSITION | VELOCITY;
 
         if ((cm.componentMasks[player] & POSITION) != POSITION) return;
+
         auto& playerPos = cm.positions[player];
+
 
         for (Entity e : entities) {
             if ((cm.componentMasks[e] & requiredMask) != requiredMask) continue;
             if (e == player) continue;
-
+            if (cm.componentMasks[e] & PROJECTILE) continue;
             auto& pos = cm.positions[e];
             auto& vel = cm.velocities[e];
 

@@ -16,6 +16,10 @@ struct DamageCooldown {
     float timer;   // time remaining before next damage
     float cooldown; // fixed cooldown duration
 };
+struct Projectile {
+    int damage;
+    float lifetime; // seconds
+};
 
 // Component bitmask identifiers
 enum ComponentType : uint32_t {
@@ -23,6 +27,7 @@ enum ComponentType : uint32_t {
     VELOCITY = 1 << 1,        // 0010
     RENDERABLE = 1 << 2,      // 0100
     PLAYERCONTROLLED = 1 << 3, // 1000
-    HEALTH = 1 << 4
+    HEALTH = 1 << 4,
+    PROJECTILE = 1 << 5
 
 };

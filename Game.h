@@ -18,6 +18,7 @@ public:
 
     // Fully mask-integrated spawn
     Entity spawnEntity(float x, float y, SDL_Color color, bool playerControlled = false);
+    Entity spawnProjectile(float x, float y, float vx, float vy, SDL_Color color);
     void destroyEntityWithComponents(Entity e);
     void destroyAllEnemies();
     void resetCollisionColors() {
@@ -39,6 +40,7 @@ private:
     EntityManager entityManager;
     EnemyAISystem enemyAISystem;
     HealthSystem healthSystem;
+    ProjectileSystem projectileSystem;
 
     Entity player;
     Entity blueBox;
